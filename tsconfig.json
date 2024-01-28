@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target"              : "ES2022",
+    "rootDir"             : "src",
+    "outDir"              : "Dist",
+    "sourceMap"           : true,
+    "extendedDiagnostics" : true,
+    "listEmittedFiles"    : true                               
+    
+  },
+  "include": [
+    "source/**/*"
+],
+}
