@@ -35,7 +35,21 @@ class Lexer {
     isEOF() {
         return this.currentPosition >= this.sourceCode.length;
     }
-    match(pattern) {
+    matchString(pattern) {
+        const value = this.sourceCode.substr(this.currentPosition).match(pattern);
+        if (value && value.index === 0) {
+            this.updatePosition(value[0]);
+            this.currentPosition += value[0].length;
+            return value[0];
+        }
+        return null;
+    }
+    skipWhitespace() {
+        while (!this.isEOF() && /\s/.test(this.sourceCode[this.currentPosition])) {
+            this.updatePosition(this.sourceCode[this.currentPosition]);
+        }
+    }
+    matchRegex(pattern) {
         const match = this.sourceCode.substr(this.currentPosition).match(pattern);
         if (match && match.index === 0) {
             const value = match[0];
@@ -45,39 +59,87 @@ class Lexer {
         }
         return null;
     }
-    skipWhitespace() {
-        this.match(/^\s+/);
+    skipComment() {
+        const startIndex = this.currentPosition;
+        while (!this.isEOF() && this.matchString(/\*\//) === null) {
+            this.updatePosition(this.sourceCode[this.currentPosition]);
+        }
+        if (this.isEOF()) {
+            console.error(`Unterminated comment starting at line ${this.currentLine}, column ${startIndex}`);
+        }
     }
-    tokenizeId() {
-        const value = this.match(/^[a-zA-Z]+/);
+    tokenizeIdOrKeyword() {
+        const value = this.matchRegex(/^[a-zA-Z][a-zA-Z0-9]*/);
         if (value !== null) {
-            return new Token('ID', value, this.currentLine, this.currentColumn - value.length + 1);
+            return new Token(value.toUpperCase(), value, this.currentLine, this.currentColumn - value.length + 1);
         }
         return null;
     }
     tokenizeNumber() {
-        const value = this.match(/^\d+/);
+        const value = this.matchRegex(/^\d+/);
         if (value !== null) {
             return new Token('NUMBER', value, this.currentLine, this.currentColumn - value.length + 1);
         }
         return null;
     }
-    // Implement other tokenization methods similarly
+    tokenizeString() {
+        const value = this.matchRegex(/^"([^"\\]|\\.)*"/);
+        if (value !== null) {
+            return new Token('STRING', value, this.currentLine, this.currentColumn - value.length + 1);
+        }
+        return null;
+    }
+    tokenizeBooleanValue() {
+        const value = this.matchRegex(/^(true|false)/);
+        if (value !== null) {
+            return new Token('BOOLEAN', value, this.currentLine, this.currentColumn - value.length + 1);
+        }
+        return null;
+    }
+    tokenizeOperator() {
+        const operators = ['==', '!=', '+']; // Add other operators as needed
+        for (const operator of operators) {
+            const value = this.matchString(new RegExp(`^${operator}`));
+            if (value !== null) {
+                return new Token('OPERATOR', value, this.currentLine, this.currentColumn - value.length + 1);
+            }
+        }
+        return null;
+    }
+    tokenizePunctuation() {
+        const value = this.matchString(/[{}()=;]/);
+        if (value !== null) {
+            return new Token('PUNCTUATION', value, this.currentLine, this.currentColumn - value.length + 1);
+        }
+        return null;
+    }
     tokenize() {
         const tokens = [];
         const errors = [];
         while (!this.isEOF()) {
             this.skipWhitespace();
             const startPosition = this.currentPosition;
-            // Tokenize code here
-            // If encountered an error
-            const invalidToken = this.sourceCode.substring(startPosition, this.currentPosition);
-            errors.push({
-                message: `Invalid token "${invalidToken}"`,
-                line: this.currentLine,
-                column: this.currentColumn - invalidToken.length + 1
-            });
-            this.currentPosition++; // Move to the next character to continue tokenizing
+            let token = this.tokenizeIdOrKeyword() ||
+                this.tokenizeNumber() ||
+                this.tokenizeString() ||
+                this.tokenizeBooleanValue() ||
+                this.tokenizeOperator() ||
+                this.tokenizePunctuation();
+            if (token) {
+                tokens.push(token);
+            }
+            else if (this.matchString(/\/\*/)) {
+                this.skipComment();
+            }
+            else {
+                const invalidToken = this.sourceCode.substring(startPosition, this.currentPosition);
+                errors.push({
+                    message: `Invalid token "${invalidToken}"`,
+                    line: this.currentLine,
+                    column: this.currentColumn - invalidToken.length + 1
+                });
+                this.currentPosition++; // Move to the next character to continue tokenizing
+            }
         }
         if (errors.length > 0) {
             // Display errors in a more readable format in the output textarea
