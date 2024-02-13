@@ -1,182 +1,272 @@
-class Token {
-  constructor(public type: string, public value: string, public line: number, public column: number) {}
+// Define the token type
+type Token = {
+    char: string;
+    type: TokenType;
+    position: { line: number; column: number };
+    error?: string; // Optional error message
+};
+
+// Define the token types
+enum TokenType {
+    ID = "ID",
+    NUMBER = "NUMBER",
+    WHITESPACE = "WHITESPACE",
+    PUNCTUATION = "PUNCTUATION",
+    KEYWORD = "KEYWORD",
 }
 
-class Lexer {
-  private sourceCode: string;
-  private currentPosition: number;
-  private currentLine: number;
-  private currentColumn: number;
+// Function to perform lexical analysis
+function lex(input: string): string {
+    const programs = lexPrograms(input);
+    let output = "";
+    programs.forEach((program, index) => {
+        output += `Program ${index + 1}:\n`;
+        let errorsExist = false;
+        program.forEach(token => {
+            if (token.error) {
+                errorsExist = true;
+                output += `Error: ${token.error} at line ${token.position.line}, column ${token.position.column}\n`;
+            } else {
+                let tokenDescription = "";
+                if (token.type === TokenType.KEYWORD) {
+                    tokenDescription = `Keyword "${token.char}"`;
+                } else if (token.type === TokenType.WHITESPACE) {
+                    return;
+                } else {
+                    tokenDescription = `Char: ${token.char}, Type: ${token.type}`;
+                }
+                output += `${tokenDescription}, Line: ${token.position.line}, Column: ${token.position.column}\n`;
+            }
+        });
+        if (!errorsExist) {
+            output += "\n";
+        }
+    });
+    return output;
+}
 
-  constructor(sourceCode: string) {
-      this.sourceCode = sourceCode;
-      this.currentPosition = 0;
-      this.currentLine = 1;
-      this.currentColumn = 1;
-  }
+// Function to skip whitespace characters
+function skipWhitespace(input: string, currentIndex: number): number {
+    let index = currentIndex;
+    while (index < input.length && /\s/.test(input[index])) {
+        if (input[index] === '"') {
+            const nextQuoteIndex = input.indexOf('"', index + 1);
+            if (nextQuoteIndex !== -1) {
+                index = nextQuoteIndex + 1;
+            } else {
+                return index;
+            }
+        } else {
+            index++;
+        }
+    }
+    return index;
+}
 
-  private updatePosition(value: string) {
-      for (const char of value) {
-          if (char === '\n') {
-              this.currentLine++;
-              this.currentColumn = 1;
-          } else {
-              this.currentColumn++;
-          }
-      }
-  }
+// Function to perform lexical analysis on multiple programs
+function lexPrograms(input: string): Token[][] {
+    const sourceCode: string = input.trim();
+    const programs: Token[][] = [[]];
+    let line = 1;
+    let column = 1;
+    let currentProgramIndex = 0;
+    let insideComment = false;
+    let insideString = false;
 
-  private isEOF(): boolean {
-      return this.currentPosition >= this.sourceCode.length;
-  }
-
-  private matchString(pattern: RegExp): string | null {
-    const value = this.sourceCode.substr(this.currentPosition).match(pattern);
-
-    if (value && value.index === 0) {
-        this.updatePosition(value[0]);
-        this.currentPosition += value[0].length;
-        return value[0];
+    let currentIndex = skipWhitespace(sourceCode, 0);
+    if (sourceCode[currentIndex] === '/' && sourceCode[currentIndex + 1] === '*') {
+        insideComment = true;
+        currentIndex = sourceCode.indexOf('*/', currentIndex + 2);
+        if (currentIndex === -1) {
+            console.error("ERROR: Unclosed comment at the end of the source code");
+            return programs;
+        }
+        currentIndex += 2;
     }
 
-    return null;
-}
+    for (let i = currentIndex; i < sourceCode.length; i++) {
+        let currentChar: string = sourceCode[i];
 
+        if (currentChar === '"') {
+            insideString = !insideString;
+        }
 
-private skipWhitespace(): void {
-  while (!this.isEOF() && /\s/.test(this.sourceCode[this.currentPosition])) {
-      this.updatePosition(this.sourceCode[this.currentPosition]);
-  }
-}
+        if (insideString) {
+            continue;
+        }
 
+        if (!/^[a-z0-9\s+\-\/*=\(\)\{\}"!]+$/.test(currentChar)) {
+            programs[currentProgramIndex].push({
+                char: currentChar,
+                type: TokenType.PUNCTUATION,
+                position: { line, column },
+                error: `Invalid character "${currentChar}"`
+            });
+            currentProgramIndex++;
+            programs[currentProgramIndex] = [];
+            line = 1;
+            column = 1;
+            continue;
+        }
 
-  private matchRegex(pattern: RegExp): string | null {
-      const match = this.sourceCode.substr(this.currentPosition).match(pattern);
+        if (insideComment) {
+            if (currentChar === "*" && sourceCode[i + 1] === "/") {
+                insideComment = false;
+                i++;
+            }
+            continue;
+        }
+        if (currentChar === "/" && sourceCode[i + 1] === "*") {
+            insideComment = true;
+            i++;
+            continue;
+        }
 
-      if (match && match.index === 0) {
-          const value = match[0];
-          this.updatePosition(value);
-          this.currentPosition += value.length;
-          return value;
-      }
+        if (currentChar === "{") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Open Block notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "}") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : closing Block notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "(") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Open Method notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === ")") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Close Method notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "=") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Assignment notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "+") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Addition notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "==") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Equality notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === "!=") {
+            programs[currentProgramIndex].push({
+                char: `${currentChar} : Inequality notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+        } else if (currentChar === '"') {
+            const remainingSource = sourceCode.slice(i);
+            const closingIndex = remainingSource.indexOf('"');
+            if (closingIndex === -1) {
+                programs[currentProgramIndex].push({
+                    char: currentChar,
+                    type: TokenType.PUNCTUATION,
+                    position: { line, column },
+                    error: "Unclosed quote"
+                });
+            }
+        } else if (currentChar === '/') {
+            if (sourceCode[i + 1] === '*') {
+                insideComment = true;
+                i++;
+                continue;
+            }
+        }
 
-      return null;
-  }
+        if (currentChar === "$") {
+            programs[currentProgramIndex].push({
+                char: currentChar,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+            programs[currentProgramIndex].push({
+                char: `EOP notation ${currentProgramIndex + 1} found at line ${line}`,
+                type: TokenType.PUNCTUATION,
+                position: { line, column }
+            });
+            currentProgramIndex++;
+            programs[currentProgramIndex] = [];
+            line++;
+            column = 1;
+            continue;
+        }
 
-  private skipComment(): void {
-    const startIndex = this.currentPosition;
-    while (!this.isEOF() && this.matchString(/\*\//) === null) {
-        this.updatePosition(this.sourceCode[this.currentPosition]);
-    }
-    if (this.isEOF()) {
-        console.error(`Unterminated comment starting at line ${this.currentLine}, column ${startIndex}`);
-    }
-}
+        let currentToken = '';
+        while (/[a-zA-Z0-9]/.test(currentChar) && i < sourceCode.length) {
+            currentToken += currentChar;
+            i++;
+            currentChar = sourceCode[i];
+        }
+        const tokenType: TokenType = getTokenType(currentToken, sourceCode, i);
+        
+        programs[currentProgramIndex].push({
+            char: currentToken,
+            type: tokenType,
+            position: { line, column }
+        });
 
-  private tokenizeIdOrKeyword(): Token | null {
-      const value = this.matchRegex(/^[a-zA-Z][a-zA-Z0-9]*/);
-
-      if (value !== null) {
-          return new Token(value.toUpperCase(), value, this.currentLine, this.currentColumn - value.length + 1);
-      }
-
-      return null;
-  }
-
-  private tokenizeNumber(): Token | null {
-      const value = this.matchRegex(/^\d+/);
-
-      if (value !== null) {
-          return new Token('NUMBER', value, this.currentLine, this.currentColumn - value.length + 1);
-      }
-
-      return null;
-  }
-
-  private tokenizeString(): Token | null {
-      const value = this.matchRegex(/^"([^"\\]|\\.)*"/);
-
-      if (value !== null) {
-          return new Token('STRING', value, this.currentLine, this.currentColumn - value.length + 1);
-      }
-
-      return null;
-  }
-
-  private tokenizeBooleanValue(): Token | null {
-      const value = this.matchRegex(/^(true|false)/);
-
-      if (value !== null) {
-          return new Token('BOOLEAN', value, this.currentLine, this.currentColumn - value.length + 1);
-      }
-
-      return null;
-  }
-
-  private tokenizeOperator(): Token | null {
-    const operators = ['==', '!=', '+']; // Add other operators as needed
-
-    for (const operator of operators) {
-        const value = this.matchString(new RegExp(`^${operator}`));
-
-        if (value !== null) {
-            return new Token('OPERATOR', value, this.currentLine, this.currentColumn - value.length + 1);
+        if (currentChar === "\n") {
+            line++;
+            column = 1;
+        } else {
+            column++;
         }
     }
 
-    return null;
+    if (insideComment) {
+        programs[currentProgramIndex].push({
+            char: "",
+            type: TokenType.PUNCTUATION,
+            position: { line, column },
+            error: "Unclosed comment at the end of the source code"
+        });
+    }
+    return programs;
 }
 
-
-  private tokenizePunctuation(): Token | null {
-      const value = this.matchString(/[{}()=;]/);
-
-      if (value !== null) {
-          return new Token('PUNCTUATION', value, this.currentLine, this.currentColumn - value.length + 1);
-      }
-
-      return null;
-  }
-
-  public tokenize(): Token[] {
-      const tokens: Token[] = [];
-      const errors: { message: string, line: number, column: number }[] = [];
-
-      while (!this.isEOF()) {
-        this.skipWhitespace();
-        const startPosition = this.currentPosition;
-    
-        let token =
-            this.tokenizeIdOrKeyword() ||
-            this.tokenizeNumber() ||
-            this.tokenizeString() ||
-            this.tokenizeBooleanValue() ||
-            this.tokenizeOperator() ||
-            this.tokenizePunctuation();
-    
-        if (token) {
-            tokens.push(token);
-        } else if (this.matchString(/\/\*/)) {
-            this.skipComment();
-        } else {
-              const invalidToken = this.sourceCode.substring(startPosition, this.currentPosition);
-              errors.push({
-                  message: `Invalid token "${invalidToken}"`,
-                  line: this.currentLine,
-                  column: this.currentColumn - invalidToken.length + 1
-              });
-              this.currentPosition++; // Move to the next character to continue tokenizing
-          }
-      }
-
-      if (errors.length > 0) {
-          // Display errors in a more readable format in the output textarea
-          const outputTextarea = document.getElementById("outputTextarea");
-          outputTextarea.value = errors.map(error =>
-              `Error at line ${error.line}, column ${error.column}: ${error.message}`
-          ).join('\n');
-      }
-
-      return tokens;
-  }
+// Function to determine token type
+function getTokenType(token: string, sourceCode: string, currentIndex: number): TokenType {
+    if (isKeyword(token)) {
+        return TokenType.KEYWORD;
+    }
+    if (/^[0-9]+$/.test(token)) {
+        return TokenType.NUMBER;
+    }
+    if (/^\s+$/.test(token)) {
+        return TokenType.WHITESPACE;
+    }
+    if (/^(""|\(\)|==|!=|\+|\{\}|\$)$/.test(token)) {
+        return TokenType.PUNCTUATION;
+    }
+    if (/^[a-z]+$/.test(token)) {
+        return TokenType.ID;
+    }
+    if (/^"([a-z\s]*)"$/.test(token)) {
+        return TokenType.ID;
+    }
+    return TokenType.ID;
 }
+
+// Function to check if a token is a keyword
+function isKeyword(token: string): boolean {
+    return keywords.includes(token);
+}
+
+// Define the list of keywords
+const keywords = ["print", "while", "if", "int", "string", "boolean","true","false"];
