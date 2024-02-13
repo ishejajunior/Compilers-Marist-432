@@ -29,21 +29,20 @@ nav ul li {
 
 .textbox-container {
     display: flex;
-    margin-bottom: 1rem; /* Added margin at the bottom for better spacing */
-}
+    margin-bottom: 1rem;
 
 .textbox {
     margin-right: 1rem;
 }
 
 textarea {
-    width: 300px; /* Adjust the width as needed */
+    width: 300px; 
 }
 
-/* Adjusting styles for the submit button */
+
 button {
-    background-color: #007bff; /* Blue color */
-    color: #fff; /* White text color */
+    background-color: #007bff; 
+    color: #fff; 
     padding: 0.5rem 1rem;
     border: none;
     cursor: pointer;
@@ -77,4 +76,5 @@ button {
 
 .dropdown:hover .dropdown-content {
     display: block;
+}
 }
