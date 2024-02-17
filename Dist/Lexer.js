@@ -85,19 +85,6 @@ function lexPrograms(input) {
         if (insideString) {
             continue;
         }
-        if (!/^[a-z0-9\s+\-\/*=\(\)\{\}"!]+$/.test(currentChar)) {
-            programs[currentProgramIndex].push({
-                char: currentChar,
-                type: TokenType.PUNCTUATION,
-                position: { line, column },
-                error: `Invalid character "${currentChar}"`
-            });
-            currentProgramIndex++;
-            programs[currentProgramIndex] = [];
-            line = 1;
-            column = 1;
-            continue;
-        }
         if (insideComment) {
             if (currentChar === "*" && sourceCode[i + 1] === "/") {
                 insideComment = false;
@@ -209,11 +196,24 @@ function lexPrograms(input) {
             currentChar = sourceCode[i];
         }
         const tokenType = getTokenType(currentToken, sourceCode, i);
-        programs[currentProgramIndex].push({
-            char: currentToken,
-            type: tokenType,
-            position: { line, column }
-        });
+        // If it's a keyword, treat it as a whole word
+        if (tokenType === TokenType.KEYWORD) {
+            programs[currentProgramIndex].push({
+                char: currentToken,
+                type: tokenType,
+                position: { line, column }
+            });
+        }
+        else {
+            // Otherwise, treat each character individually
+            for (let char of currentToken) {
+                programs[currentProgramIndex].push({
+                    char,
+                    type: TokenType.ID,
+                    position: { line, column }
+                });
+            }
+        }
         if (currentChar === "\n") {
             line++;
             column = 1;
