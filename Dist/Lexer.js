@@ -14,10 +14,15 @@ function lex(input) {
     programs.forEach((program, index) => {
         output += `Program ${index + 1}:\n`;
         let errorsExist = false;
+        let WarningExist = false;
         program.forEach(token => {
-            if (token.error) {
+            if (token.Warning) {
+                WarningExist = true;
+                output += `Warning: ${token.Warning} at line ${token.position.line}:${token.position.column}\n`;
+            }
+            else if (token.error) {
                 errorsExist = true;
-                output += `Error: ${token.error} at line ${token.position.line}, column ${token.position.column}\n`;
+                output += `Error - ${token.error} at line ${token.position.line}:${token.position.column}\n`;
             }
             else {
                 let tokenDescription = "";
@@ -28,9 +33,9 @@ function lex(input) {
                     return;
                 }
                 else {
-                    tokenDescription = `Char: ${token.char}, Type: ${token.type}`;
+                    tokenDescription = `Debug-Lexer- [ ${token.char} ], Type: ${token.type}`;
                 }
-                output += `${tokenDescription}, Line: ${token.position.line}, Column: ${token.position.column}\n`;
+                output += `${tokenDescription}, found at (${token.position.line}:${token.position.column})\n`;
             }
         });
         if (!errorsExist) {
@@ -72,7 +77,7 @@ function lexPrograms(input) {
         insideComment = true;
         currentIndex = sourceCode.indexOf('*/', currentIndex + 2);
         if (currentIndex === -1) {
-            console.error("ERROR: Unclosed comment at the end of the source code");
+            console.error("ERROR: Unclosed comment");
             return programs;
         }
         currentIndex += 2;
@@ -85,17 +90,82 @@ function lexPrograms(input) {
         if (insideString) {
             continue;
         }
+        // Inside the main loop that iterates through the source code character by character
+        if (!insideString) {
+            // Check for capital letters (errors)
+            if (/[A-Z]/.test(currentChar)) {
+                programs[currentProgramIndex].push({
+                    char: currentChar,
+                    type: TokenType.PUNCTUATION,
+                    position: { line, column },
+                    error: `Invalid character "${currentChar}" (Capital letters are not allowed)`
+                });
+                continue; // Skip this character
+            }
+            // Check for numbers
+            if (/^[0-9]+$/.test(currentChar)) {
+                // Construct the complete number
+                let currentNumber = currentChar;
+                let j = i + 1;
+                while (/^[0-9]+$/.test(sourceCode[j]) && j < sourceCode.length) {
+                    currentNumber += sourceCode[j];
+                    j++;
+                }
+                programs[currentProgramIndex].push({
+                    char: currentNumber,
+                    type: TokenType.NUMBER,
+                    position: { line, column }
+                });
+                i = j - 1; // Move the index to the last digit of the number
+                continue; // Skip this number
+            }
+            // Check for identifiers (IDs)
+            if (/^[a-z]+$/.test(currentChar)) {
+                // Construct the complete keyword
+                let currentKeyword = currentChar;
+                let j = i + 1;
+                while (/^[a-z]+$/.test(sourceCode[j]) && j < sourceCode.length) {
+                    currentKeyword += sourceCode[j];
+                    j++;
+                }
+                // Check if the constructed word is a keyword
+                if (isKeyword(currentKeyword)) {
+                    // If it's a keyword, treat it as a whole word
+                    programs[currentProgramIndex].push({
+                        char: currentKeyword,
+                        type: TokenType.KEYWORD,
+                        position: { line, column }
+                    });
+                    i = j - 1; // Move the index to the last character of the keyword
+                    continue; // Skip this keyword
+                }
+            }
+        }
+        // Inside the main loop that iterates through the source code character by character
         if (insideComment) {
             if (currentChar === "*" && sourceCode[i + 1] === "/") {
-                insideComment = false;
-                i++;
+                insideComment = false; // Exiting comment
+                i++; // Skip next character
             }
-            continue;
+            continue; // Skip this character
         }
+        // Check if current character starts a comment
         if (currentChar === "/" && sourceCode[i + 1] === "*") {
-            insideComment = true;
-            i++;
-            continue;
+            insideComment = true; // Entering comment
+            i++; // Skip next character
+            continue; // Skip this character
+        }
+        const multiCharOperators = ["==", "!=", "+="]; // Add other multi-character operators as needed
+        for (const op of multiCharOperators) {
+            if (sourceCode.slice(i, i + op.length) === op) {
+                programs[currentProgramIndex].push({
+                    char: op,
+                    type: TokenType.PUNCTUATION,
+                    position: { line, column }
+                });
+                i += op.length - 1; // Move the index past the operator
+                continue; // Skip this operator
+            }
         }
         if (currentChar === "{") {
             programs[currentProgramIndex].push({
@@ -161,7 +231,7 @@ function lexPrograms(input) {
                     char: currentChar,
                     type: TokenType.PUNCTUATION,
                     position: { line, column },
-                    error: "Unclosed quote"
+                    Warning: "Unclosed quote"
                 });
             }
         }
@@ -227,7 +297,7 @@ function lexPrograms(input) {
             char: "",
             type: TokenType.PUNCTUATION,
             position: { line, column },
-            error: "Unclosed comment at the end of the source code"
+            Warning: "Unclosed comment at the end of the source code"
         });
     }
     return programs;
