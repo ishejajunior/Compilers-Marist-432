@@ -106,7 +106,6 @@ function lexPrograms(input: string): Token[][] {
         }
 
         if (currentChar === '$') {
-            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column } });
             programs[currentProgramIndex].push({ char: `EOP notation ${currentProgramIndex + 1} found at line ${line}`, type: TokenType.PUNCTUATION, position: { line, column } });
             currentProgramIndex++;
             programs[currentProgramIndex] = [];
