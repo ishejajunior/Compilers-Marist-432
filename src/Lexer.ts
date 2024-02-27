@@ -14,6 +14,7 @@ enum TokenType {
     WHITESPACE = "WHITESPACE",
     PUNCTUATION = "PUNCTUATION",
     KEYWORD = "KEYWORD",
+    STRING = "STRING",
 }
 
 // Function to perform lexical analysis
@@ -43,12 +44,13 @@ function lex(input: string): string {
                 output += `${tokenDescription}, found at (${token.position.line}:${token.position.column})\n`;
             }
         });
-        if (!errorsExist) {
-            output += "\n";
+        if (!errorsExist && !warningExist) {
+            output += "No errors or warnings found.\n\n";
         }
     });
     return output;
 }
+
 
 // Function to perform lexical analysis on multiple programs
 function lexPrograms(input: string): Token[][] {
@@ -59,19 +61,37 @@ function lexPrograms(input: string): Token[][] {
     let currentProgramIndex = 0;
     let insideComment = false;
     let insideString = false;
+    let currentStringLiteral = "";
+    let eopFound = false;
+    let openSymbolsStack: string[] = [];
 
     for (let i = 0; i < sourceCode.length; i++) {
         let currentChar: string = sourceCode[i];
 
+        
         if (currentChar === '"') {
-            insideString = !insideString;
+            if (!insideString) {
+                insideString = true;
+                currentStringLiteral = '"';
+            } else {
+                insideString = false;
+                currentStringLiteral += '"';
+                programs[currentProgramIndex].push({ char: currentStringLiteral, type: TokenType.STRING, position: { line, column } });
+                currentStringLiteral = "";
+            }
             continue;
         }
 
         if (insideString) {
+            if (/^[a-z\s]$/.test(currentChar)) {
+                currentStringLiteral += currentChar;
+                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.STRING, position: { line, column } });
+            } else {
+                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.STRING, position: { line, column }, error: 'Invalid character inside string' });
+            }
             continue;
         }
-
+        
         if (insideComment) {
             if (currentChar === '*' && sourceCode[i + 1] === '/') {
                 insideComment = false;
@@ -114,6 +134,8 @@ function lexPrograms(input: string): Token[][] {
             continue;
         }
 
+        
+
         const multiCharOperators = ["==", "!=", "+="];
         for (const op of multiCharOperators) {
             if (sourceCode.slice(i, i + op.length) === op) {
@@ -139,12 +161,57 @@ function lexPrograms(input: string): Token[][] {
             continue;
         }
 
+        // Check for opening symbols
+        const openingSymbols: string[] = ['{', '(', '['];
+        if (openingSymbols.includes(currentChar)) {
+            openSymbolsStack.push(currentChar);
+        }
+
+
+        const closingSymbols: string[] = ['}', ')', ']'];
+        if (closingSymbols.includes(currentChar)) {
+            if (openSymbolsStack.length === 0) {
+                // No matching opening symbol found
+                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column }, warning: 'Unexpected closing symbol' });
+            } else {
+                const expectedOpeningSymbol = closingSymbols[openingSymbols.indexOf(currentChar)];
+                if (openSymbolsStack[openSymbolsStack.length - 1] !== expectedOpeningSymbol) {
+                    // Mismatched opening symbol
+                    programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column }, warning: 'Unexpected closing symbol' });
+                } else {
+                    // Matching opening symbol found, remove from stack
+                    openSymbolsStack.pop();
+                }
+            }
+        }
+
         if (currentChar === "\n") {
             line++;
             column = 1;
         } else {
             column++;
         }
+    }
+
+     // Check for unclosed symbols at the end of the program
+     openSymbolsStack.forEach(symbol => {
+        const warningMessage = `Unclosed ${symbol}`;
+        programs[currentProgramIndex].push({
+            char: "",
+            type: TokenType.PUNCTUATION,
+            position: { line, column },
+            warning: warningMessage
+        });
+    });
+
+    if (!eopFound) {
+        // Push a warning token to indicate missing EOP
+        programs[currentProgramIndex].push({
+            char: "",
+            type: TokenType.PUNCTUATION,
+            position: { line, column },
+            warning: "No end-of-program sign ('$') found"
+        });
     }
 
     if (insideComment) {
@@ -158,6 +225,8 @@ function lexPrograms(input: string): Token[][] {
 
     return programs;
 }
+
+
 
 // Function to skip whitespace characters
 function skipWhitespace(input: string, currentIndex: number): number {
