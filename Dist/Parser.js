@@ -1,146 +1,174 @@
-// Function to perform parsing
-function parse(tokens) {
-    const astNodes = [];
-    tokens.forEach(program => {
-        const programAST = parseProgram(program);
-        astNodes.push(programAST);
-    });
-    return astNodes;
+// Define the token types
+var TokenType;
+(function (TokenType) {
+    TokenType["PARSER_ID"] = "ID";
+    TokenType["PARSER_NUMBER"] = "NUMBER";
+    TokenType["PARSER_WHITESPACE"] = "WHITESPACE";
+    TokenType["PARSER_PUNCTUATION"] = "PUNCTUATION";
+    TokenType["PARSER_KEYWORD"] = "KEYWORD";
+    TokenType["PARSER_STRING"] = "STRING";
+    TokenType["PARSER_OPENING_BLOCK"] = "Opening Block";
+    TokenType["PARSER_CLOSING_BLOCK"] = "Closing Block";
+    TokenType["PARSER_DTYPE"] = "DataType";
+    TokenType["PARSER_BOOLOP"] = "Boolean Operator";
+    TokenType["PARSER_BOOLVAL"] = "Boolean value";
+    TokenType["PARSER_INTOP"] = "Additition Sign";
+    TokenType["PARSER_WhileState"] = "While Statement";
+    TokenType["PARSER_PrintState"] = "Print Statement";
+    TokenType["PARSER_IfState"] = "If statement";
+    TokenType["PARSER_Assigment"] = "Equal Sign";
+    TokenType["PARSER_EoP"] = "End of program";
+})(TokenType || (TokenType = {}));
+class Parser {
+    tokens;
+    currentTokenIndex;
+    currentToken;
+    constructor(tokens) {
+        this.tokens = tokens;
+        this.currentTokenIndex = 0;
+        this.currentToken = this.tokens[this.currentTokenIndex];
+    }
+    advance() {
+        this.currentTokenIndex++;
+        this.currentToken = this.tokens[this.currentTokenIndex];
+    }
+    match(tokenType) {
+        if (this.currentToken && this.currentToken.type === tokenType) {
+            this.advance();
+        }
+        else {
+            this.error(`Expected ${tokenType} but found ${this.currentToken?.type}`);
+        }
+    }
+    error(message) {
+        console.error(`Parsing Error: ${message}`);
+    }
+    // Grammar Rules
+    parseProgram() {
+        console.log("Parsing Program...");
+        this.parseBlock();
+        this.match(TokenType.EoP);
+        console.log("Program Parsed Successfully!");
+    }
+    parseBlock() {
+        console.log("Parsing Block...");
+        this.match(TokenType.OPENING_BLOCK);
+        this.parseStatementList();
+        this.match(TokenType.CLOSING_BLOCK);
+        console.log("Block Parsed Successfully!");
+    }
+    parseStatementList() {
+        console.log("Parsing Statement List...");
+        if (this.currentToken &&
+            (this.currentToken.type === TokenType.PrintState ||
+                this.currentToken.type === TokenType.ID ||
+                this.currentToken.type === TokenType.DTYPE ||
+                this.currentToken.type === TokenType.WhileState ||
+                this.currentToken.type === TokenType.IfState ||
+                this.currentToken.type === TokenType.OPENING_BLOCK)) {
+            this.parseStatement();
+        }
+        console.log("Statement List Parsed Successfully!");
+    }
+    parseStatement() {
+        console.log("Parsing Statement...");
+        switch (this.currentToken?.type) {
+            case TokenType.PrintState:
+                this.parsePrintStatement();
+                break;
+            case TokenType.ID:
+                this.parseAssignmentStatement();
+                break;
+            case TokenType.DTYPE:
+                this.parseVarDecl();
+                break;
+            case TokenType.WhileState:
+                this.parseWhileStatement();
+                break;
+            case TokenType.IfState:
+                this.parseIfStatement();
+                break;
+            case TokenType.OPENING_BLOCK:
+                this.parseBlock();
+                break;
+            default:
+                this.error("Invalid Statement");
+        }
+        console.log("Statement Parsed Successfully!");
+    }
+    parsePrintStatement() {
+        console.log("Parsing Print Statement...");
+        this.match(TokenType.PrintState);
+        this.match(TokenType.PUNCTUATION); // Opening Parenthesis
+        this.parseExpr();
+        this.match(TokenType.PUNCTUATION); // Closing Parenthesis
+        console.log("Print Statement Parsed Successfully!");
+    }
+    parseAssignmentStatement() {
+        console.log("Parsing Assignment Statement...");
+        this.match(TokenType.ID);
+        this.match(TokenType.Assigment);
+        this.parseExpr();
+        console.log("Assignment Statement Parsed Successfully!");
+    }
+    parseVarDecl() {
+        console.log("Parsing Variable Declaration...");
+        this.match(TokenType.DTYPE);
+        this.match(TokenType.ID);
+        console.log("Variable Declaration Parsed Successfully!");
+    }
+    parseWhileStatement() {
+        console.log("Parsing While Statement...");
+        this.match(TokenType.WhileState);
+        this.parseBooleanExpr();
+        this.parseBlock();
+        console.log("While Statement Parsed Successfully!");
+    }
+    parseIfStatement() {
+        console.log("Parsing If Statement...");
+        this.match(TokenType.IfState);
+        this.parseBooleanExpr();
+        this.parseBlock();
+        console.log("If Statement Parsed Successfully!");
+    }
+    parseExpr() {
+        console.log("Parsing Expression...");
+        if (this.currentToken &&
+            (this.currentToken.type === TokenType.NUMBER ||
+                this.currentToken.type === TokenType.STRING ||
+                this.currentToken.type === TokenType.BOOLVAL ||
+                this.currentToken.type === TokenType.ID)) {
+            this.advance();
+        }
+        else {
+            this.error("Invalid Expression");
+        }
+        console.log("Expression Parsed Successfully!");
+    }
+    parseBooleanExpr() {
+        console.log("Parsing Boolean Expression...");
+        this.match(TokenType.OPENING_BLOCK);
+        this.parseExpr();
+        this.match(TokenType.BOOLOP);
+        this.parseExpr();
+        this.match(TokenType.CLOSING_BLOCK);
+        console.log("Boolean Expression Parsed Successfully!");
+    }
 }
-// Function to parse a program
-function parseProgram(program) {
-    const block = parseBlock(program);
-    return block;
-}
-// Function to parse a block
-function parseBlock(program) {
-    const blockStartIndex = program.findIndex(token => token.char === "{");
-    const blockEndIndex = program.findIndex(token => token.char === "}");
-    if (blockStartIndex === -1 || blockEndIndex === -1) {
-        // Handle error: Missing curly braces for block
-        return { type: "ErrorNode", message: "Missing curly braces for block" };
-    }
-    const statementList = parseStatementList(program.slice(blockStartIndex + 1, blockEndIndex));
-    return { type: "BlockNode", statements: statementList };
-}
-// Function to parse a statement list
-function parseStatementList(tokens) {
-    const statements = [];
-    while (tokens.length > 0) {
-        const statementEndIndex = tokens.findIndex(token => token.char === ",");
-        const statementTokens = statementEndIndex === -1 ? tokens : tokens.slice(0, statementEndIndex);
-        const statement = parseStatement(statementTokens);
-        statements.push(statement);
-        if (statementEndIndex === -1)
-            break; // No more statements
-        tokens = tokens.slice(statementEndIndex + 1).filter(token => token.char !== "space");
-    }
-    return statements;
-}
-// Function to parse a statement
-function parseStatement(tokens) {
-    if (tokens.length === 0) {
-        // Handle error: Empty statement
-        return { type: "ErrorNode", message: "Empty statement" };
-    }
-    const firstToken = tokens[0];
-    if (firstToken.char === "print") {
-        return parsePrintStatement(tokens);
-    }
-    else if (firstToken.char === "int" || firstToken.char === "string" || firstToken.char === "boolean") {
-        return parseVarDecl(tokens);
-    }
-    else if (firstToken.char === "while") {
-        return parseWhileStatement(tokens);
-    }
-    else if (firstToken.char === "if") {
-        return parseIfStatement(tokens);
-    }
-    else if (firstToken.char === "{") {
-        return parseBlock(tokens);
-    }
-    else if (tokens.find(token => token.char === "=")) {
-        return parseAssignmentStatement(tokens);
-    }
-    else {
-        // Handle error: Invalid statement
-        return { type: "ErrorNode", message: "Invalid statement" };
-    }
-}
-// Function to parse a print statement
-function parsePrintStatement(tokens) {
-    const exprStartIndex = tokens.findIndex(token => token.char === "(");
-    const exprEndIndex = tokens.findIndex(token => token.char === ")");
-    if (exprStartIndex === -1 || exprEndIndex === -1 || exprStartIndex > exprEndIndex) {
-        // Handle error: Malformed print statement
-        return { type: "ErrorNode", message: "Malformed print statement" };
-    }
-    const exprTokens = tokens.slice(exprStartIndex + 1, exprEndIndex);
-    const expr = parseExpr(exprTokens);
-    return { type: "PrintStatementNode", expression: expr };
-}
-// Function to parse an assignment statement
-function parseAssignmentStatement(tokens) {
-    const equalIndex = tokens.findIndex(token => token.char === "=");
-    if (equalIndex === -1 || equalIndex === 0 || equalIndex === tokens.length - 1) {
-        // Handle error: Malformed assignment statement
-        return { type: "ErrorNode", message: "Malformed assignment statement" };
-    }
-    const idToken = tokens[equalIndex - 1];
-    const exprTokens = tokens.slice(equalIndex + 1);
-    const id = { type: "IdentifierNode", value: idToken.char };
-    const expr = parseExpr(exprTokens);
-    return { type: "AssignmentStatementNode", identifier: id, expression: expr };
-}
-// Function to parse a variable declaration
-function parseVarDecl(tokens) {
-    if (tokens.length < 2) {
-        // Handle error: Malformed variable declaration
-        return { type: "ErrorNode", message: "Malformed variable declaration" };
-    }
-    const typeToken = tokens[0];
-    const idToken = tokens[1];
-    const id = { type: "IdentifierNode", value: idToken.char };
-    return { type: "VarDeclNode", typeSpecifier: typeToken.char, identifier: id };
-}
-// Function to parse a while statement
-function parseWhileStatement(tokens) {
-    const boolExprStartIndex = tokens.findIndex(token => token.char === "(");
-    const boolExprEndIndex = tokens.findIndex(token => token.char === ")");
-    const blockStartIndex = tokens.findIndex(token => token.char === "{");
-    const blockEndIndex = tokens.findIndex(token => token.char === "}");
-    if (boolExprStartIndex === -1 || boolExprEndIndex === -1 || blockStartIndex === -1 || blockEndIndex === -1) {
-        // Handle error: Malformed while statement
-        return { type: "ErrorNode", message: "Malformed while statement" };
-    }
-    const boolExprTokens = tokens.slice(boolExprStartIndex + 1, boolExprEndIndex);
-    const blockTokens = tokens.slice(blockStartIndex + 1, blockEndIndex);
-    const boolExpr = parseBooleanExpr(boolExprTokens);
-    const block = parseBlock(blockTokens);
-    return { type: "WhileStatementNode", condition: boolExpr, block };
-}
-// Function to parse an if statement
-function parseIfStatement(tokens) {
-    const boolExprStartIndex = tokens.findIndex(token => token.char === "(");
-    const boolExprEndIndex = tokens.findIndex(token => token.char === ")");
-    const blockStartIndex = tokens.findIndex(token => token.char === "{");
-    const blockEndIndex = tokens.findIndex(token => token.char === "}");
-    if (boolExprStartIndex === -1 || boolExprEndIndex === -1 || blockStartIndex === -1 || blockEndIndex === -1) {
-        // Handle error: Malformed if statement
-        return { type: "ErrorNode", message: "Malformed if statement" };
-    }
-    const boolExprTokens = tokens.slice(boolExprStartIndex + 1, boolExprEndIndex);
-    const blockTokens = tokens.slice(blockStartIndex + 1, blockEndIndex);
-    const boolExpr = parseBooleanExpr(boolExprTokens);
-    const block = parseBlock(blockTokens);
-    return { type: "IfStatementNode", condition: boolExpr, block };
-}
-// Function to parse an expression
-function parseExpr(tokens) {
-    // Implement parsing logic for expressions
-}
-// Function to parse a boolean expression
-function parseBooleanExpr(tokens) {
-    // Implement parsing logic for boolean expressions
-}
+// Example usage
+const tokens = [
+    { char: '{', type: TokenType.OPENING_BLOCK, position: { line: 1, column: 1 } },
+    { char: 'print', type: TokenType.PrintState, position: { line: 1, column: 2 } },
+    { char: '(', type: TokenType.PUNCTUATION, position: { line: 1, column: 3 } },
+    { char: '5', type: TokenType.NUMBER, position: { line: 1, column: 4 } },
+    { char: ')', type: TokenType.PUNCTUATION, position: { line: 1, column: 5 } },
+    { char: '{', type: TokenType.OPENING_BLOCK, position: { line: 1, column: 6 } },
+    { char: 'int', type: TokenType.DTYPE, position: { line: 1, column: 7 } },
+    { char: 'x', type: TokenType.ID, position: { line: 1, column: 8 } },
+    { char: '=', type: TokenType.Assigment, position: { line: 1, column: 9 } },
+    { char: '2', type: TokenType.NUMBER, position: { line: 1, column: 10 } },
+    { char: '$', type: TokenType.EoP, position: { line: 1, column: 11 } }
+];
+const parser = new Parser(tokens);
+parser.parseProgram();
 //# sourceMappingURL=Parser.js.map
