@@ -30,6 +30,7 @@ nav ul li {
 .textbox-container {
     display: flex;
     margin-bottom: 1rem;
+}
 
 .textbox {
     margin-right: 1rem;
@@ -38,7 +39,6 @@ nav ul li {
 textarea {
     width: 300px; 
 }
-
 
 button {
     background-color: #007bff; 
@@ -76,5 +76,4 @@ button {
 
 .dropdown:hover .dropdown-content {
     display: block;
-}
 }
