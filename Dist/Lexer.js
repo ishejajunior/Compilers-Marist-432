@@ -7,6 +7,17 @@ var TokenType;
     TokenType["PUNCTUATION"] = "PUNCTUATION";
     TokenType["KEYWORD"] = "KEYWORD";
     TokenType["STRING"] = "STRING";
+    TokenType["OPENING_BLOCK"] = "Opening Block";
+    TokenType["CLOSING_BLOCK"] = "Closing Block";
+    TokenType["DTYPE"] = "DataType";
+    TokenType["BOOLOP"] = "Boolean Operator";
+    TokenType["BOOLVAL"] = "Boolean value";
+    TokenType["INTOP"] = "Additition Sign";
+    TokenType["WhileState"] = "While Statement";
+    TokenType["PrintState"] = "Print Statement";
+    TokenType["IfState"] = "If statement";
+    TokenType["Assigment"] = "Equal Sign";
+    TokenType["EoP"] = "End of program";
 })(TokenType || (TokenType = {}));
 // Function to perform lexical analysis
 function lex(input) {
@@ -57,119 +68,226 @@ function lexPrograms(input) {
     let currentStringLiteral = "";
     let eopFound = false;
     let openSymbolsStack = [];
+    // Function to skip whitespace characters
+    function skipWhitespace(input, currentIndex) {
+        let index = currentIndex;
+        while (index < input.length && /\s/.test(input[index])) {
+            if (input[index] === '"') {
+                const nextQuoteIndex = input.indexOf('"', index + 1);
+                if (nextQuoteIndex !== -1) {
+                    index = nextQuoteIndex + 1;
+                }
+                else {
+                    return index;
+                }
+            }
+            else {
+                index++;
+            }
+        }
+        return index;
+    }
+    // Function to create an error token
+    function createErrorToken(char, line, column, errorMessage) {
+        return {
+            char,
+            type: TokenType.PUNCTUATION,
+            position: { line, column },
+            error: `Invalid character "${char}" (${errorMessage})`
+        };
+    }
+    // Function to read a number token
+    function readNumberToken(sourceCode, currentIndex, line, column) {
+        let index = currentIndex;
+        let currentNumber = sourceCode[index];
+        let newIndex = index + 1;
+        while (/^[0-9]+$/.test(sourceCode[newIndex]) && newIndex < sourceCode.length) {
+            currentNumber += sourceCode[newIndex];
+            newIndex++;
+        }
+        return {
+            token: { char: currentNumber, type: TokenType.NUMBER, position: { line, column } },
+            newIndex: newIndex - 1
+        };
+    }
+    // Function to read an identifier or keyword token
+    function readIdentifierOrKeywordToken(sourceCode, currentIndex, line, column) {
+        let index = currentIndex;
+        let currentToken = sourceCode[index];
+        let newIndex = index + 1;
+        while (/^[a-z]+$/.test(sourceCode[newIndex]) && newIndex < sourceCode.length) {
+            currentToken += sourceCode[newIndex];
+            newIndex++;
+        }
+        const tokenType = isKeyword(currentToken) ? TokenType.KEYWORD : TokenType.ID;
+        return {
+            token: { char: currentToken, type: tokenType, position: { line, column } },
+            newIndex: newIndex - 1
+        };
+    }
+    // Function to check if a token is a keyword
+    function isKeyword(token) {
+        return keywords.includes(token);
+    }
+    // Define the list of keywords
+    const keywords = ["print", "while", "if", "int", "string", "boolean", "True", "False"];
     for (let i = 0; i < sourceCode.length; i++) {
         let currentChar = sourceCode[i];
-        if (currentChar === '"') {
-            if (!insideString) {
-                insideString = true;
-                currentStringLiteral = '"';
-            }
-            else {
+        // Inside string literal
+        if (insideString) {
+            if (currentChar === '"') {
                 insideString = false;
-                currentStringLiteral += '"';
-                programs[currentProgramIndex].push({ char: currentStringLiteral, type: TokenType.STRING, position: { line, column } });
+                for (let j = 0; j < currentStringLiteral.length; j++) {
+                    programs[currentProgramIndex].push({ char: currentStringLiteral[j], type: TokenType.STRING, position: { line, column } });
+                    column++;
+                }
                 currentStringLiteral = "";
             }
-            continue;
-        }
-        if (insideString) {
-            if (/^[a-z\s]$/.test(currentChar)) {
-                currentStringLiteral += currentChar;
-                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.STRING, position: { line, column } });
-            }
             else {
-                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.STRING, position: { line, column }, error: 'Invalid character inside string' });
+                if (/^[a-z]$/.test(currentChar)) {
+                    currentStringLiteral += currentChar;
+                }
+                else {
+                    programs[currentProgramIndex].push(createErrorToken(currentChar, line, column, "Invalid character"));
+                }
             }
             continue;
         }
-        if (insideComment) {
-            if (currentChar === '*' && sourceCode[i + 1] === '/') {
-                insideComment = false;
-                i++; // Skip the closing slash
-            }
+        // Check for opening and closing string literal
+        if (currentChar === '"') {
+            insideString = true;
             continue;
         }
-        if (currentChar === '/' && sourceCode[i + 1] === '*') {
+        // Check for comments
+        if (!insideComment && currentChar === '/' && sourceCode[i + 1] === '*') {
             insideComment = true;
             i++; // Skip the asterisk
             continue;
         }
-        if (/^[A-Z]+$/.test(currentChar)) {
-            programs[currentProgramIndex].push(createErrorToken(currentChar, line, column, "Capital letters are not allowed"));
+        if (insideComment && currentChar === '*' && sourceCode[i + 1] === '/') {
+            insideComment = false;
+            i++; // Skip the closing slash
             continue;
         }
-        if (/^[0-9]+$/.test(currentChar)) {
-            const { token, newIndex } = readNumberToken(sourceCode, i, line, column);
-            programs[currentProgramIndex].push(token);
-            i = newIndex;
+        // Skip characters inside comments
+        if (insideComment) {
             continue;
         }
-        if (/^[a-z]+$/.test(currentChar)) {
-            const { token, newIndex } = readIdentifierOrKeywordToken(sourceCode, i, line, column);
-            programs[currentProgramIndex].push(token);
-            i = newIndex;
+        // Check for opening and closing block
+        if (currentChar === '{') {
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.OPENING_BLOCK, position: { line, column } });
+            openSymbolsStack.push('{');
             continue;
         }
+        if (currentChar === '}') {
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.CLOSING_BLOCK, position: { line, column } });
+            if (openSymbolsStack.length > 0 && openSymbolsStack[openSymbolsStack.length - 1] === '{') {
+                openSymbolsStack.pop();
+            }
+            else {
+                // No matching opening symbol found
+                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column }, warning: 'Unexpected closing symbol' });
+            }
+            continue;
+        }
+        // Check for parentheses
+        if (currentChar === '(' || currentChar === ')') {
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column } });
+            continue;
+        }
+        // Check for data types
+        const dataTypes = {
+            'int': TokenType.DTYPE,
+            'string': TokenType.DTYPE,
+            'boolean': TokenType.DTYPE
+        };
+        if (currentChar in dataTypes) {
+            const tokenType = dataTypes[currentChar];
+            programs[currentProgramIndex].push({ char: currentChar, type: tokenType, position: { line, column } });
+            continue;
+        }
+        // Check for boolean operators
+        const boolOps = {
+            '==': TokenType.BOOLVAL,
+            '!=': TokenType.BOOLVAL
+        };
+        if (currentChar === '=' && sourceCode[i + 1] === '=') {
+            const tokenType = TokenType.BOOLVAL;
+            programs[currentProgramIndex].push({ char: '==', type: tokenType, position: { line, column } });
+            i++; // Skip the next character
+            continue;
+        }
+        if (currentChar === '!' && sourceCode[i + 1] === '=') {
+            const tokenType = TokenType.BOOLVAL;
+            programs[currentProgramIndex].push({ char: '!=', type: tokenType, position: { line, column } });
+            i++; // Skip the next character
+            continue;
+        }
+        // Check for boolean values
+        const boolValues = {
+            'True': TokenType.BOOLVAL,
+            'False': TokenType.BOOLVAL
+        };
+        if (currentChar in boolValues) {
+            const tokenType = boolValues[currentChar];
+            programs[currentProgramIndex].push({ char: currentChar, type: tokenType, position: { line, column } });
+            continue;
+        }
+        // Check for addition sign
+        if (currentChar === '+') {
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.INTOP, position: { line, column } });
+            continue;
+        }
+        // Check for keywords
+        const keywords = {
+            'print': TokenType.PrintState,
+            'while': TokenType.WhileState,
+            'if': TokenType.IfState
+        };
+        if (currentChar in keywords) {
+            const tokenType = keywords[currentChar];
+            programs[currentProgramIndex].push({ char: currentChar, type: tokenType, position: { line, column } });
+            continue;
+        }
+        // Check for assignment
+        if (currentChar === '=') {
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.Assigment, position: { line, column } });
+            continue;
+        }
+        // Check for EOP
         if (currentChar === '$') {
-            programs[currentProgramIndex].push({ char: `EOP notation ${currentProgramIndex + 1} found at line ${line}`, type: TokenType.PUNCTUATION, position: { line, column } });
+            programs[currentProgramIndex].push({ char: currentChar, type: TokenType.EoP, position: { line, column } });
             currentProgramIndex++;
             programs[currentProgramIndex] = [];
             line++;
             column = 1;
             continue;
         }
-        const multiCharOperators = ["==", "!=", "+="];
-        for (const op of multiCharOperators) {
-            if (sourceCode.slice(i, i + op.length) === op) {
-                programs[currentProgramIndex].push({ char: op, type: TokenType.PUNCTUATION, position: { line, column } });
-                i += op.length - 1;
-                continue;
-            }
-        }
-        const punctuationTokens = {
-            "{": "Open Block notation",
-            "}": "closing Block notation",
-            "(": "Open Method notation",
-            ")": "Close Method notation",
-            "=": "Assignment notation",
-            "+": "Addition notation",
-            "==": "Equality notation",
-            "!=": "Inequality notation",
-        };
-        if (currentChar in punctuationTokens) {
-            const tokenTypeDescription = punctuationTokens[currentChar];
-            programs[currentProgramIndex].push({ char: `${currentChar} : ${tokenTypeDescription}`, type: TokenType.PUNCTUATION, position: { line, column } });
+        // Check for numbers
+        if (/^[0-9]+$/.test(currentChar)) {
+            const { token, newIndex } = readNumberToken(sourceCode, i, line, column);
+            programs[currentProgramIndex].push(token);
+            i = newIndex;
             continue;
         }
-        // Check for opening symbols
-        const openingSymbols = ['{', '(', '['];
-        if (openingSymbols.includes(currentChar)) {
-            openSymbolsStack.push(currentChar);
+        // Check for identifiers or keywords
+        if (/^[a-z]+$/.test(currentChar)) {
+            const { token, newIndex } = readIdentifierOrKeywordToken(sourceCode, i, line, column);
+            programs[currentProgramIndex].push(token);
+            i = newIndex;
+            continue;
         }
-        const closingSymbols = ['}', ')', ']'];
-        if (closingSymbols.includes(currentChar)) {
-            if (openSymbolsStack.length === 0) {
-                // No matching opening symbol found
-                programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column }, warning: 'Unexpected closing symbol' });
-            }
-            else {
-                const expectedOpeningSymbol = closingSymbols[openingSymbols.indexOf(currentChar)];
-                if (openSymbolsStack[openSymbolsStack.length - 1] !== expectedOpeningSymbol) {
-                    // Mismatched opening symbol
-                    programs[currentProgramIndex].push({ char: currentChar, type: TokenType.PUNCTUATION, position: { line, column }, warning: 'Unexpected closing symbol' });
-                }
-                else {
-                    // Matching opening symbol found, remove from stack
-                    openSymbolsStack.pop();
-                }
-            }
-        }
+        // Increment line and column numbers
         if (currentChar === "\n") {
             line++;
             column = 1;
         }
         else {
             column++;
+        }
+        // Check for invalid characters
+        if (/[^a-zA-Z0-9\s"';{}=!$()]/.test(currentChar)) {
+            programs[currentProgramIndex].push(createErrorToken(currentChar, line, column, "Invalid character"));
         }
     }
     // Check for unclosed symbols at the end of the program
