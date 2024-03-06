@@ -50,8 +50,13 @@ function executeCode() {
     // Tokenize the input using the lex function
     var tokens = lex(input);
 
+    var parser=new Parser(tokens);
+
+    parser.parseProgram();
+
     // Display the tokens in the output textarea
     var outputTextarea = document.getElementById("outputTextarea");
     outputTextarea.value = tokens;
+    //outputTextarea.value=parser.getParsingMessages();
 }
 
