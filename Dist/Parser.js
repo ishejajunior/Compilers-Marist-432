@@ -21,16 +21,42 @@ var TokenType;
 })(TokenType || (TokenType = {}));
 class Parser {
     tokens;
+    tokenTypes;
+    currentProgramIndex;
     currentTokenIndex;
     currentToken;
     constructor(tokens) {
         this.tokens = tokens;
+        this.currentProgramIndex = 0;
         this.currentTokenIndex = 0;
-        this.currentToken = this.tokens[this.currentTokenIndex];
+        this.currentToken = this.tokens[this.currentProgramIndex][this.currentTokenIndex];
+        this.tokenTypes = this.extractTokenTypes(tokens);
+    }
+    // Helper function to extract token types from the token stream
+    extractTokenTypes(tokens) {
+        const tokenTypes = [];
+        for (const programTokens of tokens) {
+            for (const token of programTokens) {
+                tokenTypes.push(token.type);
+            }
+        }
+        return tokenTypes;
     }
     advance() {
+        // Move to the next token within the current program
         this.currentTokenIndex++;
-        this.currentToken = this.tokens[this.currentTokenIndex];
+        // If reached the end of the current program, move to the next program if available
+        if (this.currentTokenIndex >= this.tokens[this.currentProgramIndex].length) {
+            this.currentProgramIndex++;
+            this.currentTokenIndex = 0;
+        }
+        // If reached the end of all programs, set currentToken to null
+        if (this.currentProgramIndex >= this.tokens.length) {
+            this.currentToken = null;
+        }
+        else {
+            this.currentToken = this.tokens[this.currentProgramIndex][this.currentTokenIndex];
+        }
     }
     match(tokenType) {
         if (this.currentToken && this.currentToken.type === tokenType) {
@@ -42,13 +68,21 @@ class Parser {
     }
     error(message) {
         console.error(`Parsing Error: ${message}`);
+        console.log(this.currentToken);
     }
     // Grammar Rules
     parseProgram() {
         console.log("Parsing Program...");
-        this.parseBlock();
-        this.match(TokenType.EoP);
-        console.log("Program Parsed Successfully!");
+        while (this.currentToken && this.currentToken.type === TokenType.OPENING_BLOCK) {
+            this.parseBlock();
+        }
+        // Check for end-of-program token
+        if (this.currentToken && this.currentToken.type === TokenType.PARSER_EoP) {
+            console.log("Program Parsed Successfully!");
+        }
+        else {
+            this.error("Expected End of Program");
+        }
     }
     parseBlock() {
         console.log("Parsing Block...");
@@ -56,10 +90,11 @@ class Parser {
         this.parseStatementList();
         this.match(TokenType.CLOSING_BLOCK);
         console.log("Block Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseStatementList() {
         console.log("Parsing Statement List...");
-        if (this.currentToken &&
+        while (this.currentToken &&
             (this.currentToken.type === TokenType.PrintState ||
                 this.currentToken.type === TokenType.ID ||
                 this.currentToken.type === TokenType.DTYPE ||
@@ -69,6 +104,7 @@ class Parser {
             this.parseStatement();
         }
         console.log("Statement List Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseStatement() {
         console.log("Parsing Statement...");
@@ -95,6 +131,7 @@ class Parser {
                 this.error("Invalid Statement");
         }
         console.log("Statement Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parsePrintStatement() {
         console.log("Parsing Print Statement...");
@@ -103,6 +140,7 @@ class Parser {
         this.parseExpr();
         this.match(TokenType.PUNCTUATION); // Closing Parenthesis
         console.log("Print Statement Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseAssignmentStatement() {
         console.log("Parsing Assignment Statement...");
@@ -110,12 +148,14 @@ class Parser {
         this.match(TokenType.Assigment);
         this.parseExpr();
         console.log("Assignment Statement Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseVarDecl() {
         console.log("Parsing Variable Declaration...");
         this.match(TokenType.DTYPE);
         this.match(TokenType.ID);
         console.log("Variable Declaration Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseWhileStatement() {
         console.log("Parsing While Statement...");
@@ -123,6 +163,7 @@ class Parser {
         this.parseBooleanExpr();
         this.parseBlock();
         console.log("While Statement Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseIfStatement() {
         console.log("Parsing If Statement...");
@@ -130,6 +171,7 @@ class Parser {
         this.parseBooleanExpr();
         this.parseBlock();
         console.log("If Statement Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseExpr() {
         console.log("Parsing Expression...");
@@ -144,6 +186,7 @@ class Parser {
             this.error("Invalid Expression");
         }
         console.log("Expression Parsed Successfully!");
+        console.log(this.currentToken);
     }
     parseBooleanExpr() {
         console.log("Parsing Boolean Expression...");
@@ -153,22 +196,8 @@ class Parser {
         this.parseExpr();
         this.match(TokenType.CLOSING_BLOCK);
         console.log("Boolean Expression Parsed Successfully!");
+        console.log(this.currentToken);
     }
 }
-// Example usage
-const tokens = [
-    { char: '{', type: TokenType.OPENING_BLOCK, position: { line: 1, column: 1 } },
-    { char: 'print', type: TokenType.PrintState, position: { line: 1, column: 2 } },
-    { char: '(', type: TokenType.PUNCTUATION, position: { line: 1, column: 3 } },
-    { char: '5', type: TokenType.NUMBER, position: { line: 1, column: 4 } },
-    { char: ')', type: TokenType.PUNCTUATION, position: { line: 1, column: 5 } },
-    { char: '{', type: TokenType.OPENING_BLOCK, position: { line: 1, column: 6 } },
-    { char: 'int', type: TokenType.DTYPE, position: { line: 1, column: 7 } },
-    { char: 'x', type: TokenType.ID, position: { line: 1, column: 8 } },
-    { char: '=', type: TokenType.Assigment, position: { line: 1, column: 9 } },
-    { char: '2', type: TokenType.NUMBER, position: { line: 1, column: 10 } },
-    { char: '$', type: TokenType.EoP, position: { line: 1, column: 11 } }
-];
-const parser = new Parser(tokens);
-parser.parseProgram();
+;
 //# sourceMappingURL=Parser.js.map
