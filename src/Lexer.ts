@@ -59,6 +59,7 @@ function lex(input: string): string {
             output += "No errors or warnings found.\n\n";
         }
     });
+    console.log(programs);
     return output;
 }
 
