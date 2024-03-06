@@ -54,6 +54,7 @@ function lex(input) {
             output += "No errors or warnings found.\n\n";
         }
     });
+    console.log(programs);
     return output;
 }
 // Function to perform lexical analysis on multiple programs
